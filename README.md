@@ -1,7 +1,7 @@
 # 🖧 Managed Switch Card
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![GitHub release](https://img.shields.io/github/v/release/LoneWolf84/managed-switch-card)](https://github.com/LoneWolf84/managed-switch-card/releases)
+[![GitHub release](https://img.shields.io/github/v/release/YOUR_USERNAME/managed-switch-card)](https://github.com/YOUR_USERNAME/managed-switch-card/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Card Lovelace universale per switch di rete gestiti in **Home Assistant**.  
@@ -35,18 +35,23 @@ Nata dalla fusione delle card originali per Managed Switch MySwitch-8 (8 porte) 
 ### Via HACS (consigliato)
 
 1. HACS → **Frontend** → `⋮` → **Repository personalizzati**
-2. URL: `https://github.com/LoneWolf84/managed-switch-card` — Categoria: **Lovelace**
+2. URL: `https://github.com/YOUR_USERNAME/managed-switch-card` — Categoria: **Lovelace**
 3. Installa e ricarica la cache del browser
 
 ### Manuale
 
-1. Scarica `managed-switch-card.js` dall'[ultima release](https://github.com/LoneWolf84/managed-switch-card/releases/latest)
-2. Copialo in `config/www/managed-switch-card.js`
-3. HA → **Impostazioni → Dashboard → Risorse**:
-   ```
-   URL:  /local/managed-switch-card.js
-   Tipo: JavaScript Module
-   ```
+1. Scarica `managed-switch-card.js` e `managed-switch-port-card.js` dall'[ultima release](https://github.com/YOUR_USERNAME/managed-switch-card/releases/latest)
+2. Copiali entrambi in `config/www/`
+3. HA → **Impostazioni → Dashboard → Risorse** — aggiungi entrambi:
+
+   | URL | Tipo |
+   |-----|------|
+   | `/local/managed-switch-card.js` | JavaScript Module |
+   | `/local/managed-switch-port-card.js` | JavaScript Module |
+
+4. Ricarica la pagina
+
+> **Via HACS** i file vengono copiati in `www/community/managed-switch-card/` e i percorsi diventano `/hacsfiles/managed-switch-card/managed-switch-card.js` — gestiti in automatico.
 
 ---
 
@@ -346,7 +351,7 @@ Card companion che mostra i dettagli della porta selezionata. Appare **solo quan
 
 Stesso file `managed-switch-port-card.js` da aggiungere come risorsa:
 ```
-URL:  /local/managed-switch-port-card.js
+URL:  /hacsfiles/managed-switch-card/managed-switch-port-card.js
 Tipo: JavaScript Module
 ```
 

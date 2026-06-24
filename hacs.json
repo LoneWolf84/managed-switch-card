@@ -1,10 +1,6 @@
 {
   "name": "Managed Switch Card",
   "filename": "managed-switch-card.js",
-  "content_in_root": true,
-  "render_readme": true,
   "homeassistant": "2023.0.0",
-  "extra_files": [
-    "managed-switch-port-card.js"
-  ]
+  "hacs": "1.6.0"
 }
