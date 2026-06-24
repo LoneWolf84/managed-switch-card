@@ -1,0 +1,54 @@
+name: "🐛 Bug report"
+description: Segnala un problema con la card
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Grazie per la segnalazione. Compila tutti i campi per aiutarci a riprodurre il problema.
+
+  - type: input
+    id: version
+    attributes:
+      label: Versione card
+      placeholder: es. v1.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Versione Home Assistant
+      placeholder: es. 2024.6.0
+    validations:
+      required: true
+
+  - type: input
+    id: switch_model
+    attributes:
+      label: Modello switch
+      placeholder: es. GS108Ev3, JGS524Ev2
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configurazione YAML della card
+      render: yaml
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descrizione del problema
+      placeholder: Cosa succede? Cosa ti aspettavi?
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Errori in console (F12 → Console)
+      render: text
