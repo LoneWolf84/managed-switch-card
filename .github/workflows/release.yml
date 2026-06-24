@@ -10,32 +10,35 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Get version
-        id: version
+        id: v
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Create release
+      - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.VERSION }}
-          name: "Managed Switch Card ${{ steps.version.outputs.VERSION }}"
+          name: "Managed Switch Card ${{ steps.v.outputs.VERSION }}"
           body: |
-            ## Managed Switch Card ${{ steps.version.outputs.VERSION }}
+            ## Managed Switch Card ${{ steps.v.outputs.VERSION }}
 
-            ### Installazione manuale
-            Scarica i file JS e copiali in `config/www/`.
-
-            ### Via HACS
+            ### Installazione via HACS
             Aggiorna direttamente da HACS → Frontend.
 
-            Vedi il [README](https://github.com/${{ github.repository }}#readme) per la configurazione.
+            ### Installazione manuale
+            Scarica i file JS e copiali in `config/www/`:
+            - `managed-switch-card.js`
+            - `managed-switch-port-card.js`
+
+            Poi aggiungili come risorse Lovelace:
+            ```
+            /local/managed-switch-card.js
+            /local/managed-switch-port-card.js
+            ```
+
+            Vedi il [README](https://github.com/${{ github.repository }}#readme).
           files: |
-            managed-switch-card.js
-            managed-switch-port-card.js
-          draft: false
-          prerelease: false
+            dist/managed-switch-card.js
+            dist/managed-switch-port-card.js
