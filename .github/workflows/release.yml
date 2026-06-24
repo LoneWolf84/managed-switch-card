@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: "Managed Switch Card ${{ steps.version.outputs.VERSION }}"
+          body: |
+            ## Managed Switch Card ${{ steps.version.outputs.VERSION }}
+
+            ### Installazione manuale
+            Scarica i file JS e copiali in `config/www/`.
+
+            ### Via HACS
+            Aggiorna direttamente da HACS → Frontend.
+
+            Vedi il [README](https://github.com/${{ github.repository }}#readme) per la configurazione.
+          files: |
+            managed-switch-card.js
+            managed-switch-port-card.js
+          draft: false
+          prerelease: false
