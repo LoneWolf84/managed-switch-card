@@ -7,81 +7,79 @@
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  DEFAULTS — mirror the exact visual DNA of the originals
+//  DEFAULTS
+//  All values here are neutral starting points.
+//  Entity suffixes, labels and options are configured per-user in the card
+//  editor or via YAML — nothing here is specific to any brand or installation.
 // ─────────────────────────────────────────────────────────────────────────────
 const DEFAULTS = {
   // Header
-  title:           'SWITCH',
-  model:           '',           // shown as "Modello: X" — omit to hide
-  ports:           8,
+  title:  'SWITCH',
+  model:  '',           // shown as "Modello: X" — leave empty to hide
+  ports:  4,            // start small; user sets their actual port count
 
-  // Entity patterns  (placeholders replaced by sensor_base / binary_base)
-  sensor_base:     '',           // REQUIRED  e.g. sensor.myswitch_192_168_1_1
-  binary_base:     '',           // REQUIRED  e.g. binary_sensor.myswitch_192_168_1_1
+  // Entity bases — always empty; user fills via editor
+  sensor_base: '',      // REQUIRED — set via editor
+  binary_base: '',      // REQUIRED — set via editor
 
-  // Entity name suffixes — override if your integration uses different names
+  // Entity suffixes — generic defaults that match common integrations.
+  // Override any of these in YAML if your integration uses different names.
   suffix_ip:       '_ip_address',
   suffix_sn:       '_switch_serial_number',
   suffix_fw:       '_switch_firmware',
-  suffix_boot:     '_switch_bootlader',   // set '' to hide BL line
+  suffix_boot:     '_switch_bootlader',
   suffix_io:       '_switch_io',
   suffix_rx:       '_switch_traffic_received',
   suffix_tx:       '_switch_traffic_sent',
-  suffix_status:   '_port_{N}_status',    // {N} → port number
+  suffix_status:   '_port_{N}_status',
   suffix_speed:    '_port_{N}_link_speed',
   suffix_port_rx:  '_port_{N}_traffic_received',
   suffix_port_tx:  '_port_{N}_traffic_sent',
 
-  // Override full entity id for traffic stats (useful when your stats come
-  // from a different device, like in the original switch-8 card)
-  io_entity:       '',
-  rx_entity:       '',
-  tx_entity:       '',
+  // Override full entity ids for traffic stats (optional)
+  io_entity: '',
+  rx_entity: '',
+  tx_entity: '',
 
   // input_select for port selection automations (optional)
-  input_select:    '',
-  input_select_option_prefix: 'Porta ',   // e.g. "Porta 1"
-  input_select_none: 'Nessuna',
+  input_select:               '',
+  input_select_option_prefix: 'Port ',    // e.g. "Port 1" — change to match your options
+  input_select_none:          'None',     // the "no selection" option value
 
   // Reboot button (optional)
-  reboot_button:   '',
+  reboot_button: '',
 
   // Layout
-  // 'auto'   → single row if ports ≤ 12, double (odd top / even bottom) if > 12
-  // 'single' → all ports in one row
-  // 'double' → always odd top / even bottom (original 24-port style)
-  layout: 'auto',
+  layout: 'auto',    // 'auto' | 'single' | 'double'
 
-  // Visual extras (all default to the originals — off)
-  sfp_ports:    [],    // port numbers rendered as SFP (different visual)
-  uplink_ports: [],    // port numbers get a small UPL badge
-  port_labels:  {},    // { "1": "NAS", "5": "AP" } — replaces speed text
+  // Special ports — empty by default, user configures in editor
+  sfp_ports:    [],
+  uplink_ports: [],
+  port_labels:  {},
 
-  // LED speed thresholds — fully customisable
-  // Each entry: { match: string|string[], color, shadow, label }
-  // Matched against the link_speed entity state (case-insensitive includes)
+  // LED speed tiers — covers most common speeds; extend in YAML for 2.5G / 5G
   speed_tiers: [
-    { match: ['10000','10g'],  color: '#00cfff', shadow: '0 0 6px #00cfff', label: '10G'  },
-    { match: ['1000','1g'],    color: '#00ff41', shadow: '0 0 5px #00ff41', label: '1G'   },
-    { match: ['100'],          color: '#ff9900', shadow: '0 0 5px #ff9900', label: '100'  },
-    { match: ['10'],           color: '#ff4444', shadow: '0 0 5px #ff4444', label: '10'   },
+    { match: ['10000', '10g'],  color: '#00cfff', shadow: '0 0 6px #00cfff', label: '10G'  },
+    { match: ['1000',  '1g'],   color: '#00ff41', shadow: '0 0 5px #00ff41', label: '1G'   },
+    { match: ['100'],            color: '#ff9900', shadow: '0 0 5px #ff9900', label: '100'  },
+    { match: ['10'],             color: '#ff4444', shadow: '0 0 5px #ff4444', label: '10'   },
   ],
 
-  // Colors — originals were hardcoded dark; expose them all
-  color_bg:          '#1a1a1a',
-  color_port_bg:     '#111',
-  color_port_border: '#333',
-  color_text:        '#ffffff',
-  color_accent:      '#4a90e2',
-  color_sep:         '#444',
-  color_led_off:     '#222',
+  // Colors
+  color_bg:           '#1a1a1a',
+  color_port_bg:      '#111',
+  color_port_border:  '#333',
+  color_text:         '#ffffff',
+  color_accent:       '#4a90e2',
+  color_sep:          '#444',
+  color_led_off:      '#222',
   color_footer_border:'#333',
-  color_port_num:    '#888',
+  color_port_num:     '#888',
 
   // Feature flags
-  show_reboot:   true,
-  show_stats:    true,
-  show_tooltip:  true,
+  show_reboot:  true,
+  show_stats:   true,
+  show_tooltip: true,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,14 +98,14 @@ class ManagedSwitchCard extends HTMLElement {
     return document.createElement('managed-switch-card-editor');
   }
   static getStubConfig() {
+    // Minimal blank canvas — user fills in sensor_base, binary_base and ports
+    // via the card editor. Nothing specific to any installation.
     return {
-      title: 'SWITCH',
-      model: 'MySwitch-8',
-      ports: 8,
-      sensor_base: 'sensor.myswitch_192_168_1_1',
-      binary_base: 'binary_sensor.myswitch_192_168_1_1',
-      input_select: 'input_select.port_selector',
-      reboot_button: 'button.myswitch_reboot',
+      title:       'SWITCH',
+      model:       '',
+      ports:       4,
+      sensor_base: '',
+      binary_base: '',
     };
   }
 
@@ -275,11 +273,11 @@ class ManagedSwitchCard extends HTMLElement {
     if (layout === 'single') {
       let html = '';
       for (let i = 1; i <= n; i++) html += this._renderPort(i);
-      // gap:8px matches original switch-8 style
+      // gap:8px for single-row layout
       return `<div class="port-row" style="grid-template-columns:repeat(${n},1fr);gap:8px;margin-bottom:20px">${html}</div>`;
     }
 
-    // double: odd ports top row, even ports bottom row — original switch-24 style
+    // double: odd ports top row, even ports bottom row
     // grid-template-columns: repeat(12, 1fr) in the original for 24 ports
     // For other port counts: repeat(ceil(n/2), 1fr)
     const cols = n === 24 ? 12 : Math.ceil(n / 2);
@@ -507,8 +505,8 @@ class ManagedSwitchCard extends HTMLElement {
       : `<span style="color:#555">○ Inattiva</span>`;
 
     const nameRow = customLabel
-      ? `<div class="t-title">Porta ${i} — ${customLabel}</div>`
-      : `<div class="t-title">Porta ${i}</div>`;
+      ? `<div class="t-title">${cfg.input_select_option_prefix}${i} — ${customLabel}</div>`
+      : `<div class="t-title">${cfg.input_select_option_prefix}${i}</div>`;
 
     const rxRow = portRx && portRx !== 'null' && portRx !== 'N/A'
       ? `<div class="t-row"><span class="t-lbl">↓ RX</span><span class="t-val">${portRx} MB</span></div>` : '';
@@ -543,127 +541,369 @@ class ManagedSwitchCard extends HTMLElement {
 //  VISUAL EDITOR  (Lovelace UI config panel)
 // ─────────────────────────────────────────────────────────────────────────────
 class ManagedSwitchCardEditor extends HTMLElement {
-  setConfig(config) { this._config = { ...DEFAULTS, ...config }; this._render(); }
-  set hass(h) { this._hass = h; }
 
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+    this._step = 1;  // 1=struttura, 2=sensori porta, 3=sensori globali+opzioni
+  }
+
+  setConfig(config) {
+    this._config = { ...DEFAULTS, ...config };
+    // If already configured jump to step 2
+    if (this._config.sensor_base && this._step === 1) this._step = 2;
+    this._render();
+  }
+
+  set hass(h) {
+    this._hass = h;
+    // Inject hass into any ha-entity-picker already in shadow DOM
+    this.shadowRoot.querySelectorAll('ha-entity-picker').forEach(p => p.hass = h);
+  }
+
+  // ── Event firing ──────────────────────────────────────────────────────────
   _fire(cfg) {
     this.dispatchEvent(new CustomEvent('config-changed', {
       detail: { config: cfg }, bubbles: true, composed: true,
     }));
   }
 
-  _field(label, key, type = 'text', hint = '') {
-    const v = this._config?.[key] ?? '';
+  _set(key, val) {
+    const cfg = { ...this._config, [key]: val };
+    this._config = cfg;
+    this._fire(cfg);
+  }
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+  _goStep(n) { this._step = n; this._render(); }
+
+  // ── Shared CSS ────────────────────────────────────────────────────────────
+  _css() {
     return `
-      <div class="row">
+      <style>
+        :host { display:block; font-family:Arial,sans-serif; font-size:13px; color:#eee; }
+        /* Steps bar */
+        .steps { display:flex; gap:0; margin-bottom:18px; border-radius:8px; overflow:hidden; }
+        .step-btn {
+          flex:1; padding:8px 4px; text-align:center; font-size:11px; font-weight:bold;
+          text-transform:uppercase; letter-spacing:.5px; cursor:pointer; border:none;
+          background:#1e1e1e; color:#555; transition:.2s; border-right:1px solid #333;
+        }
+        .step-btn:last-child { border-right:none; }
+        .step-btn.active { background:#4a90e2; color:#fff; }
+        .step-btn.done   { background:#1a3a1a; color:#00ff41; }
+        /* Sections */
+        .section { margin-bottom:4px; }
+        h4 { margin:16px 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:.6px;
+              color:#4a90e2; border-top:1px solid #2a2a2a; padding-top:12px; }
+        h4:first-child, h4.first { border-top:none; margin-top:0; }
+        /* Fields */
+        .row { margin-bottom:10px; }
+        label { display:block; font-size:11px; color:#888; margin-bottom:3px; }
+        input, select {
+          width:100%; padding:6px 8px; border-radius:6px; border:1px solid #444;
+          background:#1a1a1a; color:#fff; font-size:13px; box-sizing:border-box;
+        }
+        small { display:block; font-size:10px; color:#555; margin-top:3px; }
+        /* Entity picker rows */
+        .picker-row { margin-bottom:12px; }
+        .picker-row label { margin-bottom:4px; }
+        ha-entity-picker { display:block; }
+        /* Port grid preview inside editor */
+        .port-grid { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+        .port-pill {
+          padding:3px 10px; border-radius:12px; font-size:11px; font-weight:bold;
+          background:#222; border:1px solid #444; color:#888; cursor:default;
+        }
+        .port-pill.sfp  { border-color:#4a90e2; color:#4a90e2; }
+        .port-pill.upl  { border-color:#ff9900; color:#ff9900; }
+        /* Nav buttons */
+        .nav { display:flex; gap:8px; margin-top:16px; }
+        .nav-btn {
+          flex:1; padding:8px; border-radius:6px; border:none; cursor:pointer;
+          font-size:13px; font-weight:bold;
+        }
+        .nav-btn.prev { background:#2a2a2a; color:#aaa; }
+        .nav-btn.next { background:#4a90e2; color:#fff; }
+        /* Collapsible advanced */
+        details { margin-top:8px; }
+        summary { font-size:11px; color:#4a90e2; cursor:pointer; user-select:none; margin-bottom:8px; }
+        /* Color grid */
+        .color-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        .color-row { display:flex; align-items:center; gap:8px; }
+        .color-row label { flex:1; margin:0; }
+        .color-row input[type=color] { width:36px; height:28px; padding:2px; border-radius:4px; flex-shrink:0; }
+        /* Toggle */
+        .toggle-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+        .toggle-row label { margin:0; }
+        .toggle-row select { width:auto; }
+      </style>
+    `;
+  }
+
+  // ── Step bar ──────────────────────────────────────────────────────────────
+  _stepBar() {
+    const c = this._config;
+    const done1 = !!(c.sensor_base && c.binary_base);
+    const done2 = done1;
+    const labels = ['1 · Struttura', '2 · Sensori porta', '3 · Globali & Opzioni'];
+    return `<div class="steps">` + labels.map((l, i) => {
+      const n = i + 1;
+      const cls = this._step === n ? 'active' : (n < this._step || (n===1 && done1) ? 'done' : '');
+      return `<button class="step-btn ${cls}" onclick="this.getRootNode().host._goStep(${n})">${l}</button>`;
+    }).join('') + `</div>`;
+  }
+
+  // ── Entity picker helper ──────────────────────────────────────────────────
+  _picker(label, key, domain = '', hint = '') {
+    const val = this._config?.[key] || '';
+    return `
+      <div class="picker-row">
         <label>${label}</label>
-        <input type="${type}" value="${v}" data-key="${key}" onchange="this.getRootNode().host._change(event)"/>
+        <ha-entity-picker
+          data-key="${key}"
+          .value="${val}"
+          .hass="${{}}"
+          .includeDomains="${domain ? JSON.stringify([domain]) : '[]'}"
+          allow-custom-entity
+          @value-changed="this.getRootNode().host._pickerChange(event)"
+        ></ha-entity-picker>
         ${hint ? `<small>${hint}</small>` : ''}
       </div>`;
   }
 
-  _select(label, key, opts) {
+  // ── Simple input / select ─────────────────────────────────────────────────
+  _input(label, key, type = 'text', hint = '') {
+    const v = String(this._config?.[key] ?? '');
+    return `<div class="row"><label>${label}</label>
+      <input type="${type}" value="${v.replace(/"/g,'&quot;')}" data-key="${key}"
+             onchange="this.getRootNode().host._inputChange(event)"/>
+      ${hint ? `<small>${hint}</small>` : ''}</div>`;
+  }
+
+  _sel(label, key, opts) {
     const cur = String(this._config?.[key] ?? opts[0].v);
-    const options = opts.map(o => `<option value="${o.v}" ${cur===String(o.v)?'selected':''}>${o.l}</option>`).join('');
+    const os = opts.map(o=>`<option value="${o.v}"${cur===String(o.v)?' selected':''}>${o.l}</option>`).join('');
+    return `<div class="row"><label>${label}</label>
+      <select data-key="${key}" onchange="this.getRootNode().host._inputChange(event)">${os}</select></div>`;
+  }
+
+  _color(label, key) {
+    const v = this._config?.[key] || '#000000';
+    return `<div class="color-row">
+      <label>${label}</label>
+      <input type="color" value="${v}" data-key="${key}" onchange="this.getRootNode().host._inputChange(event)"/>
+    </div>`;
+  }
+
+  // ── STEP 1: Struttura ─────────────────────────────────────────────────────
+  _renderStep1() {
+    const c = this._config;
     return `
-      <div class="row">
-        <label>${label}</label>
-        <select data-key="${key}" onchange="this.getRootNode().host._change(event)">${options}</select>
+      ${this._css()}
+      <div style="padding:16px">
+        ${this._stepBar()}
+
+        <h4 class="first">Identità</h4>
+        ${this._input('Titolo (logo)', 'title')}
+        ${this._input('Modello', 'model', 'text', 'es. GS108Ev3, SG300-28 — lascia vuoto per nascondere')}
+
+        <h4>Struttura porte</h4>
+        ${this._input('Numero porte', 'ports', 'number')}
+        ${this._sel('Layout', 'layout', [
+          {v:'auto',   l:'Auto — singola ≤12, doppia >12'},
+          {v:'single', l:'Riga singola'},
+          {v:'double', l:'Doppia riga (dispari sopra / pari sotto)'},
+        ])}
+
+        <h4>Porte speciali</h4>
+        ${this._input('Porte SFP (es. 25,26)', 'sfp_ports_raw', 'text')}
+        ${this._input('Porte Uplink (es. 8)', 'uplink_ports_raw', 'text')}
+        ${this._input('Etichette porta (JSON)', 'port_labels_raw', 'text', 'es. {"1":"NAS","5":"AP"}')}
+
+        <div class="nav">
+          <button class="nav-btn next" onclick="this.getRootNode().host._goStep(2)">Avanti → Sensori porta</button>
+        </div>
       </div>`;
   }
 
-  _render() {
-    if (!this.shadowRoot) this.attachShadow({ mode: 'open' });
+  // ── STEP 2: Sensori per porta ─────────────────────────────────────────────
+  _renderStep2() {
     const c = this._config;
-    this.shadowRoot.innerHTML = `
-      <style>
-        :host{display:block;padding:16px;font-family:Arial,sans-serif;font-size:13px}
-        h4{margin:16px 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#4a90e2;border-top:1px solid #333;padding-top:12px}
-        h4:first-child{border-top:none;margin-top:0}
-        .row{margin-bottom:10px}
-        label{display:block;font-size:11px;color:#888;margin-bottom:3px}
-        input,select{width:100%;padding:5px 8px;border-radius:5px;border:1px solid #444;background:#1a1a1a;color:#fff;font-size:13px;box-sizing:border-box}
-        small{display:block;font-size:10px;color:#555;margin-top:2px}
-      </style>
+    const ports = parseInt(c.ports, 10) || 8;
 
-      <h4>Switch</h4>
-      ${this._field('Titolo card', 'title')}
-      ${this._field('Marca / Modello (es. MySwitch-8)', 'model')}
-      ${this._field('Numero porte', 'ports', 'number')}
-      ${this._select('Layout porte', 'layout', [
-        {v:'auto',   l:'Auto (≤12 → singola, >12 → doppia)'},
-        {v:'single', l:'Riga singola'},
-        {v:'double', l:'Doppia riga (dispari sopra / pari sotto)'},
-      ])}
+    // Build per-port entity pickers using override_entities map
+    const overrides = c.port_entity_overrides || {};
 
-      <h4>Entità — obbligatorie</h4>
-      ${this._field('Sensor base', 'sensor_base', 'text', 'es. sensor.myswitch_192_168_1_1')}
-      ${this._field('Binary sensor base', 'binary_base', 'text', 'es. binary_sensor.myswitch_192_168_1_1')}
-
-      <h4>Entità — opzionali</h4>
-      ${this._field('Input select (selezione porta)', 'input_select', 'text', 'es. input_select.port_selector')}
-      ${this._field('Pulsante reboot', 'reboot_button', 'text', 'es. button.myswitch_reboot')}
-      ${this._field('Override entità I/O', 'io_entity', 'text', 'lascia vuoto per usare sensor_base + suffix')}
-      ${this._field('Override entità RX', 'rx_entity', 'text')}
-      ${this._field('Override entità TX', 'tx_entity', 'text')}
-
-      <h4>Suffissi entità (avanzato)</h4>
-      ${this._field('Suffisso IP',         'suffix_ip')}
-      ${this._field('Suffisso SN',         'suffix_sn')}
-      ${this._field('Suffisso FW',         'suffix_fw')}
-      ${this._field('Suffisso Bootloader', 'suffix_boot', 'text', 'lascia vuoto per nascondere')}
-      ${this._field('Suffisso I/O',        'suffix_io')}
-      ${this._field('Suffisso RX globale', 'suffix_rx')}
-      ${this._field('Suffisso TX globale', 'suffix_tx')}
-      ${this._field('Suffisso status porta ({N}=numero)',  'suffix_status')}
-      ${this._field('Suffisso speed porta ({N}=numero)',   'suffix_speed')}
-      ${this._field('Suffisso RX porta ({N}=numero)',      'suffix_port_rx')}
-      ${this._field('Suffisso TX porta ({N}=numero)',      'suffix_port_tx')}
-
-      <h4>Porte speciali</h4>
-      ${this._field('Porte SFP (numeri separati da virgola)', 'sfp_ports_raw', 'text', 'es. 25,26')}
-      ${this._field('Porte Uplink (numeri separati da virgola)', 'uplink_ports_raw', 'text', 'es. 8')}
-      ${this._field('Etichette porte (JSON)', 'port_labels_raw', 'text', 'es. {"1":"NAS","5":"AP"}')}
-
-      <h4>Colori</h4>
-      ${this._field('Sfondo card',           'color_bg',           'color')}
-      ${this._field('Sfondo porta',          'color_port_bg',      'color')}
-      ${this._field('Bordo porta',           'color_port_border',  'color')}
-      ${this._field('Testo principale',      'color_text',         'color')}
-      ${this._field('Accento (link, label)', 'color_accent',       'color')}
-      ${this._field('Separatore',            'color_sep',          'color')}
-      ${this._field('LED spento',            'color_led_off',      'color')}
-
-      <h4>Funzionalità</h4>
-      ${this._select('Mostra pulsante reboot', 'show_reboot',  [{v:true,l:'Sì'},{v:false,l:'No'}])}
-      ${this._select('Mostra statistiche',     'show_stats',   [{v:true,l:'Sì'},{v:false,l:'No'}])}
-      ${this._select('Tooltip hover porte',    'show_tooltip', [{v:true,l:'Sì'},{v:false,l:'No'}])}
+    // Show pickers for first port as example + note about suffixes
+    const portPickersHtml = `
+      <p style="font-size:11px;color:#888;margin:0 0 12px">
+        Lascia vuoto per usare il pattern automatico
+        <code style="background:#222;padding:1px 4px;border-radius:3px">{sensor_base}{suffix}{N}</code>.
+        Usa il selettore solo se una porta usa un'entità diversa.
+      </p>
+      ${Array.from({length: Math.min(ports, 8)}, (_, i) => i + 1).map(n => `
+        <details>
+          <summary>Port ${n}${c.port_labels?.[String(n)] ? ' — ' + c.port_labels[String(n)] : ''}</summary>
+          ${this._picker(`Status port ${n}`, `override_status_${n}`, 'binary_sensor')}
+          ${this._picker(`Speed port ${n}`, `override_speed_${n}`, 'sensor')}
+          ${this._picker(`RX port ${n}`, `override_rx_${n}`, 'sensor')}
+          ${this._picker(`TX port ${n}`, `override_tx_${n}`, 'sensor')}
+        </details>
+      `).join('')}
+      ${ports > 8 ? `<small style="color:#555">Ports 9-${ports}: use the automatic suffixes (step 3 → advanced).</small>` : ''}
     `;
+
+    return `
+      ${this._css()}
+      <div style="padding:16px">
+        ${this._stepBar()}
+
+        <h4 class="first">Entità base (obbligatorie)</h4>
+        ${this._picker('Sensor base', 'sensor_base', 'sensor',
+          'Seleziona qualsiasi entità del tuo switch: il prefisso viene estratto automaticamente')}
+        ${this._picker('Binary sensor base', 'binary_base', 'binary_sensor',
+          'Seleziona qualsiasi binary sensor del tuo switch')}
+
+        <h4>Entità globali switch</h4>
+        ${this._picker('Input select selezione porta', 'input_select', 'input_select')}
+        ${this._picker('Pulsante reboot', 'reboot_button', 'button')}
+
+        <h4>Override sensori traffico globale</h4>
+        <p style="font-size:11px;color:#888;margin:0 0 10px">Solo se le statistiche vengono da un'entità diversa dal sensor_base.</p>
+        ${this._picker('I/O switch', 'io_entity', 'sensor')}
+        ${this._picker('RX switch', 'rx_entity', 'sensor')}
+        ${this._picker('TX switch', 'tx_entity', 'sensor')}
+
+        <h4>Override per porta (opzionale)</h4>
+        ${portPickersHtml}
+
+        <div class="nav">
+          <button class="nav-btn prev" onclick="this.getRootNode().host._goStep(1)">← Struttura</button>
+          <button class="nav-btn next" onclick="this.getRootNode().host._goStep(3)">Avanti → Opzioni</button>
+        </div>
+      </div>`;
   }
 
-  _change(e) {
-    const key = e.target.dataset.key;
-    let val   = e.target.value;
-    let cfg   = { ...this._config };
+  // ── STEP 3: Globali & Opzioni ─────────────────────────────────────────────
+  _renderStep3() {
+    const c = this._config;
+    return `
+      ${this._css()}
+      <div style="padding:16px">
+        ${this._stepBar()}
 
-    // Type coercions
-    if (key === 'ports') { cfg.ports = parseInt(val, 10) || 8; this._fire(cfg); return; }
-    if (['show_reboot','show_stats','show_tooltip'].includes(key)) {
-      cfg[key] = val === 'true'; this._fire(cfg); return;
+        <h4 class="first">Funzionalità</h4>
+        ${this._sel('Pulsante reboot', 'show_reboot',  [{v:'true',l:'Sì'},{v:'false',l:'No'}])}
+        ${this._sel('Statistiche traffico', 'show_stats',   [{v:'true',l:'Sì'},{v:'false',l:'No'}])}
+        ${this._sel('Tooltip hover porte',  'show_tooltip', [{v:'true',l:'Sì'},{v:'false',l:'No'}])}
+
+        <h4>Colori</h4>
+        <div class="color-grid">
+          ${this._color('Sfondo card',     'color_bg')}
+          ${this._color('Sfondo porta',    'color_port_bg')}
+          ${this._color('Bordo porta',     'color_port_border')}
+          ${this._color('Testo',           'color_text')}
+          ${this._color('Accento',         'color_accent')}
+          ${this._color('Separatore',      'color_sep')}
+          ${this._color('LED spento',      'color_led_off')}
+        </div>
+
+        <details>
+          <summary>⚙ Suffissi entità avanzati</summary>
+          ${this._input('Suffisso IP',         'suffix_ip')}
+          ${this._input('Suffisso SN',         'suffix_sn')}
+          ${this._input('Suffisso FW',         'suffix_fw')}
+          ${this._input('Suffisso Bootloader', 'suffix_boot', 'text', 'vuoto = nasconde la riga BL')}
+          ${this._input('Suffisso I/O globale','suffix_io')}
+          ${this._input('Suffisso RX globale', 'suffix_rx')}
+          ${this._input('Suffisso TX globale', 'suffix_tx')}
+          ${this._input('Suffisso status porta ({N})', 'suffix_status')}
+          ${this._input('Suffisso speed porta ({N})',  'suffix_speed')}
+          ${this._input('Suffisso RX porta ({N})',     'suffix_port_rx')}
+          ${this._input('Suffisso TX porta ({N})',     'suffix_port_tx')}
+        </details>
+
+        <div class="nav">
+          <button class="nav-btn prev" onclick="this.getRootNode().host._goStep(2)">← Sensori porta</button>
+        </div>
+      </div>`;
+  }
+
+  // ── Main render ───────────────────────────────────────────────────────────
+  _render() {
+    if (!this.shadowRoot) return;
+    const html = this._step === 1 ? this._renderStep1()
+               : this._step === 2 ? this._renderStep2()
+               : this._renderStep3();
+    this.shadowRoot.innerHTML = html;
+
+    // Inject hass into pickers after DOM update
+    requestAnimationFrame(() => {
+      this.shadowRoot.querySelectorAll('ha-entity-picker').forEach(p => {
+        if (this._hass) p.hass = this._hass;
+        p.addEventListener('value-changed', (e) => this._pickerChange(e));
+      });
+    });
+  }
+
+  // ── Change handlers ───────────────────────────────────────────────────────
+  _pickerChange(e) {
+    const key = e.target.dataset.key;
+    if (!key) return;
+    const val = e.detail.value;
+    let cfg = { ...this._config };
+
+    // Auto-extract base prefix from a full entity id
+    if (key === 'sensor_base' || key === 'binary_base') {
+      // Store full entity, then strip to base automatically
+      // Pattern: everything before _port_ or known suffixes
+      const base = this._extractBase(val, key === 'binary_base');
+      cfg[key] = base || val;
+    } else {
+      cfg[key] = val;
     }
-    if (key === 'sfp_ports_raw') {
-      cfg.sfp_ports = val.split(',').map(v=>parseInt(v.trim(),10)).filter(Boolean);
-      this._fire(cfg); return;
+    this._config = cfg;
+    this._fire(cfg);
+  }
+
+  _extractBase(entityId, isBinary) {
+    if (!entityId) return '';
+    // Remove domain prefix
+    const withoutDomain = entityId.replace(/^(sensor|binary_sensor)\./, '');
+    // Try to find known suffix patterns and strip them
+    const suffixes = [
+      '_port_\\d+_status', '_port_\\d+_link_speed', '_port_\\d+_traffic_received',
+      '_port_\\d+_traffic_sent', '_port_\\d+_io', '_port_\\d+_receiving',
+      '_port_\\d+_sending', '_port_\\d+_total_received', '_port_\\d+_total_sent',
+      '_ip_address', '_switch_name', '_switch_bootlader', '_switch_firmware',
+      '_switch_serial_number', '_response_time_seconds', '_switch_io',
+      '_switch_traffic_received', '_switch_traffic_sent',
+    ];
+    for (const suffix of suffixes) {
+      const match = withoutDomain.match(new RegExp('(.+?)' + suffix + '$'));
+      if (match) {
+        const domain = isBinary ? 'binary_sensor' : 'sensor';
+        return `${domain}.${match[1]}`;
+      }
     }
-    if (key === 'uplink_ports_raw') {
-      cfg.uplink_ports = val.split(',').map(v=>parseInt(v.trim(),10)).filter(Boolean);
-      this._fire(cfg); return;
-    }
-    if (key === 'port_labels_raw') {
-      try { cfg.port_labels = JSON.parse(val); } catch {}
-      this._fire(cfg); return;
-    }
+    // Fallback: return as-is
+    return entityId;
+  }
+
+  _inputChange(e) {
+    const key = e.target.dataset.key;
+    let val = e.target.value;
+    let cfg = { ...this._config };
+
+    if (key === 'ports')            { cfg.ports = parseInt(val,10)||8; this._config=cfg; this._fire(cfg); return; }
+    if (key === 'sfp_ports_raw')    { cfg.sfp_ports = val.split(',').map(v=>parseInt(v.trim(),10)).filter(Boolean); this._config=cfg; this._fire(cfg); return; }
+    if (key === 'uplink_ports_raw') { cfg.uplink_ports = val.split(',').map(v=>parseInt(v.trim(),10)).filter(Boolean); this._config=cfg; this._fire(cfg); return; }
+    if (key === 'port_labels_raw')  { try{cfg.port_labels=JSON.parse(val);}catch{} this._config=cfg; this._fire(cfg); return; }
+    if (['show_reboot','show_stats','show_tooltip'].includes(key)) { cfg[key]=val==='true'; this._config=cfg; this._fire(cfg); return; }
     cfg[key] = val;
+    this._config = cfg;
     this._fire(cfg);
   }
 }

@@ -16,15 +16,13 @@
 const PORT_CARD_DEFAULTS = {
   // Which input_selects to watch — the card uses whichever one is not "Nessuna"
   // List them all; first non-"Nessuna" wins.
-  input_selects: [],            // REQUIRED  ['input_select.port_selector_sw1', ...]
+  input_selects: [],            // REQUIRED — configure via the card editor
 
   // Per-switch configuration keyed by input_select entity_id
   // Each entry describes how to build entity names for that switch
   switches: {},
   // switches:
-  //   'input_select.port_selector_sw1':
-  //     sensor_base: 'sensor.myswitch1_192_168_1_1'
-  //     binary_base: 'binary_sensor.myswitch1_192_168_1_1'
+  //   'input_select.your_selector': { sensor_base: '', binary_base: '', ports: 8 }
   //     ports: 8
   //     # suffix overrides (all optional — same defaults as managed-switch-card)
   //     suffix_status:   '_port_{N}_status'
@@ -101,19 +99,8 @@ class ManagedSwitchPortCard extends HTMLElement {
   }
   static getStubConfig() {
     return {
-      input_selects: ['input_select.port_selector_sw1', 'input_select.port_selector_sw2'],
-      switches: {
-        'input_select.port_selector_sw1': {
-          sensor_base: 'sensor.myswitch1_192_168_1_1',
-          binary_base: 'binary_sensor.myswitch1_192_168_1_1',
-          ports: 8,
-        },
-        'input_select.port_selector_sw2': {
-          sensor_base: 'sensor.myswitch2_192_168_1_2',
-          binary_base: 'binary_sensor.myswitch2_192_168_1_2',
-          ports: 24,
-        },
-      },
+      input_selects: [],
+      switches: {},
     };
   }
 
