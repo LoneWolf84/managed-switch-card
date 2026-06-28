@@ -558,8 +558,10 @@ class ManagedSwitchCardEditor extends HTMLElement {
 
   set hass(h) {
     this._hass = h;
-    // Inject hass into any ha-entity-picker already in shadow DOM
-    this.shadowRoot.querySelectorAll('ha-entity-picker').forEach(p => p.hass = h);
+    // Update hass on any already-attached pickers
+    if (this.shadowRoot) {
+      this.shadowRoot.querySelectorAll('ha-entity-picker').forEach(p => p.hass = h);
+    }
   }
 
   // ── Event firing ──────────────────────────────────────────────────────────
@@ -656,21 +658,45 @@ class ManagedSwitchCardEditor extends HTMLElement {
   }
 
   // ── Entity picker helper ──────────────────────────────────────────────────
-  _picker(label, key, domain = '', hint = '') {
-    const val = this._config?.[key] || '';
-    return `
-      <div class="picker-row">
-        <label>${label}</label>
-        <ha-entity-picker
-          data-key="${key}"
-          .value="${val}"
-          .hass="${{}}"
-          .includeDomains="${domain ? JSON.stringify([domain]) : '[]'}"
-          allow-custom-entity
-          @value-changed="this.getRootNode().host._pickerChange(event)"
-        ></ha-entity-picker>
-        ${hint ? `<small>${hint}</small>` : ''}
-      </div>`;
+  // ha-entity-picker CANNOT be used via innerHTML — it must be created as a
+  // real DOM element and have .hass / .value set as JS properties.
+  // We store pending pickers and attach them in _attachPickers() after render.
+  _picker(label, key, domain, hint) {
+    // Render a placeholder div; _attachPickers() replaces it with a real picker.
+    return `<div class="picker-row" data-picker-key="${key}" data-picker-domain="${domain||''}" data-picker-hint="${hint||''}">
+      <label>${label}</label>
+      <div class="picker-slot" id="picker-${key}"></div>
+      ${hint ? `<small>${hint}</small>` : ''}
+    </div>`;
+  }
+
+  _attachPickers() {
+    if (!this.shadowRoot) return;
+    this.shadowRoot.querySelectorAll('[data-picker-key]').forEach(row => {
+      const key    = row.dataset.pickerKey;
+      const domain = row.dataset.pickerDomain;
+      const slot   = row.querySelector('.picker-slot');
+      if (!slot || slot.querySelector('ha-entity-picker')) return; // already attached
+
+      const picker = document.createElement('ha-entity-picker');
+      picker.setAttribute('allow-custom-entity', '');
+      if (domain) picker.includeDomains = [domain];
+      if (this._hass) picker.hass = this._hass;
+      // Set current value as JS property (not attribute)
+      const current = this._config?.[key] || '';
+      if (current) picker.value = current;
+
+      picker.addEventListener('value-changed', (e) => {
+        const val = e.detail?.value ?? '';
+        if (val === (this._config?.[key] || '')) return; // no change
+        this._config = { ...this._config, [key]: val };
+        this._fire(this._config);
+        // Update picker value without full re-render
+        picker.value = val;
+      });
+
+      slot.appendChild(picker);
+    });
   }
 
   // ── Simple input / select ─────────────────────────────────────────────────
@@ -761,10 +787,8 @@ class ManagedSwitchCardEditor extends HTMLElement {
         ${this._stepBar()}
 
         <h4 class="first">Entità base (obbligatorie)</h4>
-        ${this._picker('Sensor base', 'sensor_base', 'sensor',
-          'Seleziona qualsiasi entità del tuo switch: il prefisso viene estratto automaticamente')}
-        ${this._picker('Binary sensor base', 'binary_base', 'binary_sensor',
-          'Seleziona qualsiasi binary sensor del tuo switch')}
+        ${this._input('Sensor base', 'sensor_base', 'text', 'es. sensor.myswitch_192_168_1_1')}
+        ${this._input('Binary sensor base', 'binary_base', 'text', 'es. binary_sensor.myswitch_192_168_1_1')}
 
         <h4>Entità globali switch</h4>
         ${this._picker('Input select selezione porta', 'input_select', 'input_select')}
@@ -834,63 +858,16 @@ class ManagedSwitchCardEditor extends HTMLElement {
   // ── Main render ───────────────────────────────────────────────────────────
   _render() {
     if (!this.shadowRoot) return;
-    const html = this._step === 1 ? this._renderStep1()
-               : this._step === 2 ? this._renderStep2()
-               : this._renderStep3();
-    this.shadowRoot.innerHTML = html;
-
-    // Inject hass into pickers after DOM update
-    requestAnimationFrame(() => {
-      this.shadowRoot.querySelectorAll('ha-entity-picker').forEach(p => {
-        if (this._hass) p.hass = this._hass;
-        p.addEventListener('value-changed', (e) => this._pickerChange(e));
-      });
-    });
+    this.shadowRoot.innerHTML =
+      this._step === 1 ? this._renderStep1()
+    : this._step === 2 ? this._renderStep2()
+    : this._renderStep3();
+    // Attach real ha-entity-picker elements after innerHTML is set
+    requestAnimationFrame(() => this._attachPickers());
   }
 
-  // ── Change handlers ───────────────────────────────────────────────────────
-  _pickerChange(e) {
-    const key = e.target.dataset.key;
-    if (!key) return;
-    const val = e.detail.value;
-    let cfg = { ...this._config };
+  // Picker changes are handled inline in _attachPickers() per picker.
 
-    // Auto-extract base prefix from a full entity id
-    if (key === 'sensor_base' || key === 'binary_base') {
-      // Store full entity, then strip to base automatically
-      // Pattern: everything before _port_ or known suffixes
-      const base = this._extractBase(val, key === 'binary_base');
-      cfg[key] = base || val;
-    } else {
-      cfg[key] = val;
-    }
-    this._config = cfg;
-    this._fire(cfg);
-  }
-
-  _extractBase(entityId, isBinary) {
-    if (!entityId) return '';
-    // Remove domain prefix
-    const withoutDomain = entityId.replace(/^(sensor|binary_sensor)\./, '');
-    // Try to find known suffix patterns and strip them
-    const suffixes = [
-      '_port_\\d+_status', '_port_\\d+_link_speed', '_port_\\d+_traffic_received',
-      '_port_\\d+_traffic_sent', '_port_\\d+_io', '_port_\\d+_receiving',
-      '_port_\\d+_sending', '_port_\\d+_total_received', '_port_\\d+_total_sent',
-      '_ip_address', '_switch_name', '_switch_bootlader', '_switch_firmware',
-      '_switch_serial_number', '_response_time_seconds', '_switch_io',
-      '_switch_traffic_received', '_switch_traffic_sent',
-    ];
-    for (const suffix of suffixes) {
-      const match = withoutDomain.match(new RegExp('(.+?)' + suffix + '$'));
-      if (match) {
-        const domain = isBinary ? 'binary_sensor' : 'sensor';
-        return `${domain}.${match[1]}`;
-      }
-    }
-    // Fallback: return as-is
-    return entityId;
-  }
 
   _inputChange(e) {
     const key = e.target.dataset.key;
