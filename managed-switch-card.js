@@ -173,14 +173,28 @@ class ManagedSwitchCard extends HTMLElement {
     return this._hass.states?.[entityId]?.state ?? 'N/A';
   }
 
+  // Returns override entity if set, else builds from base+suffix.
+  // overrideKey: e.g. 'override_status_3' for port 3 status
   _portEntity(suffix_key, portNum) {
     const cfg = this._config;
+    // Map suffix key to override key name
+    const overrideMap = {
+      suffix_speed:   `override_speed_${portNum}`,
+      suffix_port_rx: `override_rx_${portNum}`,
+      suffix_port_tx: `override_tx_${portNum}`,
+    };
+    const overrideKey = overrideMap[suffix_key];
+    if (overrideKey && cfg[overrideKey]) return cfg[overrideKey];
+    if (!cfg.sensor_base) return null;
     const suffix = cfg[suffix_key].replace('{N}', portNum);
     return cfg.sensor_base + suffix;
   }
 
   _binaryPortEntity(suffix_key, portNum) {
     const cfg = this._config;
+    const overrideKey = `override_status_${portNum}`;
+    if (suffix_key === 'suffix_status' && cfg[overrideKey]) return cfg[overrideKey];
+    if (!cfg.binary_base) return null;
     const suffix = cfg[suffix_key].replace('{N}', portNum);
     return cfg.binary_base + suffix;
   }
@@ -207,8 +221,8 @@ class ManagedSwitchCard extends HTMLElement {
 
     const statusEntity = this._binaryPortEntity('suffix_status', i);
     const speedEntity  = this._portEntity('suffix_speed', i);
-    const status = s[statusEntity]?.state;
-    const speed  = s[speedEntity]?.state || '';
+    const status = statusEntity ? s[statusEntity]?.state : undefined;
+    const speed  = (speedEntity ? s[speedEntity]?.state : null) || '';
 
     // Exact original defaults
     let ledColor  = cfg.color_led_off;  // '#222'
@@ -234,8 +248,8 @@ class ManagedSwitchCard extends HTMLElement {
     // Port RX/TX for tooltip
     const portRxEnt = this._portEntity('suffix_port_rx', i);
     const portTxEnt = this._portEntity('suffix_port_tx', i);
-    const portRx = s[portRxEnt]?.state ?? null;
-    const portTx = s[portTxEnt]?.state ?? null;
+    const portRx = portRxEnt ? (s[portRxEnt]?.state ?? null) : null;
+    const portTx = portTxEnt ? (s[portTxEnt]?.state ?? null) : null;
 
     // Tooltip data (only built if enabled)
     const tooltipAttr = cfg.show_tooltip
@@ -297,27 +311,28 @@ class ManagedSwitchCard extends HTMLElement {
     const cfg = this._config;
     const s   = this._hass.states;
 
-    // Header info
-    const ip   = s[cfg.sensor_base + cfg.suffix_ip]?.state   || 'N/A';
-    const sn   = s[cfg.sensor_base + cfg.suffix_sn]?.state   || 'N/A';
-    const fw   = s[cfg.sensor_base + cfg.suffix_fw]?.state   || 'N/A';
-    const boot = cfg.suffix_boot
+    // Traffic stats — override entity wins; else base+suffix; else N/A
+    const ioEnt = cfg.io_entity || (cfg.sensor_base ? cfg.sensor_base + cfg.suffix_io : null);
+    const rxEnt = cfg.rx_entity || (cfg.sensor_base ? cfg.sensor_base + cfg.suffix_rx : null);
+    const txEnt = cfg.tx_entity || (cfg.sensor_base ? cfg.sensor_base + cfg.suffix_tx : null);
+    const io = (ioEnt ? s[ioEnt]?.state : null) || 'N/A';
+    const rx = (rxEnt ? s[rxEnt]?.state : null) || 'N/A';
+    const tx = (txEnt ? s[txEnt]?.state : null) || 'N/A';
+
+    // Header info — needs sensor_base
+    const ip   = cfg.sensor_base ? (s[cfg.sensor_base + cfg.suffix_ip]?.state  || 'N/A') : 'N/A';
+    const sn   = cfg.sensor_base ? (s[cfg.sensor_base + cfg.suffix_sn]?.state  || 'N/A') : 'N/A';
+    const fw   = cfg.sensor_base ? (s[cfg.sensor_base + cfg.suffix_fw]?.state  || 'N/A') : 'N/A';
+    const boot = (cfg.suffix_boot && cfg.sensor_base)
       ? (s[cfg.sensor_base + cfg.suffix_boot]?.state || 'N/A')
       : null;
 
-    // Traffic stats — prefer explicit override entities, else build from sensor_base
-    const ioEnt = cfg.io_entity || cfg.sensor_base + cfg.suffix_io;
-    const rxEnt = cfg.rx_entity || cfg.sensor_base + cfg.suffix_rx;
-    const txEnt = cfg.tx_entity || cfg.sensor_base + cfg.suffix_tx;
-    const io = s[ioEnt]?.state || 'N/A';
-    const rx = s[rxEnt]?.state || 'N/A';
-    const tx = s[txEnt]?.state || 'N/A';
-
-    // Count active ports
+    // Count active ports — use override or base+suffix
     let activeCount = 0;
     for (let i = 1; i <= cfg.ports; i++) {
-      const ent = cfg.binary_base + cfg.suffix_status.replace('{N}', i);
-      if (s[ent]?.state === 'on') activeCount++;
+      const ent = cfg[`override_status_${i}`]
+        || (cfg.binary_base ? cfg.binary_base + cfg.suffix_status.replace('{N}', i) : null);
+      if (ent && s[ent]?.state === 'on') activeCount++;
     }
 
     // ── Subtitle lines (mirrors originals exactly) ────────────────────────
@@ -495,6 +510,7 @@ class ManagedSwitchCard extends HTMLElement {
     if (!this._config.show_tooltip) return;
     const raw = el.getAttribute('data-tip');
     if (!raw) return;
+    const cfg = this._config;
     const [i, speed, portRx, portTx, status, customLabel] = raw.split('|');
 
     const existing = this.shadowRoot.querySelector('.sw-tip');
@@ -725,7 +741,6 @@ class ManagedSwitchCardEditor extends HTMLElement {
 
   // ── STEP 1: Struttura ─────────────────────────────────────────────────────
   _renderStep1() {
-    const c = this._config;
     return `
       ${this._css()}
       <div style="padding:16px">
@@ -733,7 +748,7 @@ class ManagedSwitchCardEditor extends HTMLElement {
 
         <h4 class="first">Identità</h4>
         ${this._input('Titolo (logo)', 'title')}
-        ${this._input('Modello', 'model', 'text', 'es. GS108Ev3, SG300-28 — lascia vuoto per nascondere')}
+        ${this._input('Modello', 'model', 'text', 'es. GS108Ev3 — lascia vuoto per nascondere')}
 
         <h4>Struttura porte</h4>
         ${this._input('Numero porte', 'ports', 'number')}
@@ -743,111 +758,116 @@ class ManagedSwitchCardEditor extends HTMLElement {
           {v:'double', l:'Doppia riga (dispari sopra / pari sotto)'},
         ])}
 
+        <h4>Input select</h4>
+        <p style="font-size:11px;color:#888;margin:0 0 10px">
+          Deve corrispondere esattamente alle opzioni del tuo input_select in HA.<br>
+          Prefisso opzione: es. <b>Porta </b> → genera "Porta 1", "Porta 2".<br>
+          Valore nessuna: es. <b>Nessuna</b> → valore quando nessuna porta è selezionata.
+        </p>
+        ${this._input('Prefisso opzione porta', 'input_select_option_prefix', 'text', 'es. Porta  (con spazio finale)')}
+        ${this._input('Valore nessuna selezione', 'input_select_none', 'text', 'es. Nessuna')}
+
         <h4>Porte speciali</h4>
         ${this._input('Porte SFP (es. 25,26)', 'sfp_ports_raw', 'text')}
         ${this._input('Porte Uplink (es. 8)', 'uplink_ports_raw', 'text')}
         ${this._input('Etichette porta (JSON)', 'port_labels_raw', 'text', 'es. {"1":"NAS","5":"AP"}')}
 
         <div class="nav">
-          <button class="nav-btn next" onclick="this.getRootNode().host._goStep(2)">Avanti → Sensori porta</button>
+          <button class="nav-btn next" onclick="this.getRootNode().host._goStep(2)">Avanti → Sensori →</button>
         </div>
       </div>`;
   }
 
-  // ── STEP 2: Sensori per porta ─────────────────────────────────────────────
+  // ── STEP 2: Sensori ───────────────────────────────────────────────────────
   _renderStep2() {
     const c = this._config;
-    const ports = parseInt(c.ports, 10) || 8;
+    const ports = parseInt(c.ports, 10) || 4;
 
-    // Build per-port entity pickers using override_entities map
-    const overrides = c.port_entity_overrides || {};
-
-    // Show pickers for first port as example + note about suffixes
-    const portPickersHtml = `
-      <p style="font-size:11px;color:#888;margin:0 0 12px">
-        Lascia vuoto per usare il pattern automatico
-        <code style="background:#222;padding:1px 4px;border-radius:3px">{sensor_base}{suffix}{N}</code>.
-        Usa il selettore solo se una porta usa un'entità diversa.
-      </p>
-      ${Array.from({length: Math.min(ports, 8)}, (_, i) => i + 1).map(n => `
-        <details>
-          <summary>Port ${n}${c.port_labels?.[String(n)] ? ' — ' + c.port_labels[String(n)] : ''}</summary>
-          ${this._picker(`Status port ${n}`, `override_status_${n}`, 'binary_sensor')}
-          ${this._picker(`Speed port ${n}`, `override_speed_${n}`, 'sensor')}
-          ${this._picker(`RX port ${n}`, `override_rx_${n}`, 'sensor')}
-          ${this._picker(`TX port ${n}`, `override_tx_${n}`, 'sensor')}
-        </details>
-      `).join('')}
-      ${ports > 8 ? `<small style="color:#555">Ports 9-${ports}: use the automatic suffixes (step 3 → advanced).</small>` : ''}
-    `;
+    const portPickersHtml = Array.from({length: ports}, (_, i) => i + 1).map(n => `
+      <details>
+        <summary>Porta ${n}${c.port_labels?.[String(n)] ? ' — ' + c.port_labels[String(n)] : ''}</summary>
+        ${this._picker(`Status porta ${n}`, `override_status_${n}`, 'binary_sensor',
+            'es. binary_sensor.myswitch_port_' + n + '_status')}
+        ${this._picker(`Velocità porta ${n}`, `override_speed_${n}`, 'sensor',
+            'es. sensor.myswitch_port_' + n + '_link_speed')}
+        ${this._picker(`RX porta ${n}`, `override_rx_${n}`, 'sensor')}
+        ${this._picker(`TX porta ${n}`, `override_tx_${n}`, 'sensor')}
+      </details>`).join('');
 
     return `
       ${this._css()}
       <div style="padding:16px">
         ${this._stepBar()}
 
-        <h4 class="first">Entità base (obbligatorie)</h4>
-        ${this._input('Sensor base', 'sensor_base', 'text', 'es. sensor.myswitch_192_168_1_1')}
-        ${this._input('Binary sensor base', 'binary_base', 'text', 'es. binary_sensor.myswitch_192_168_1_1')}
+        <h4 class="first">Sensori per porta</h4>
+        <p style="font-size:11px;color:#888;margin:0 0 12px">
+          Seleziona le entità per ogni porta. Se configuri i <b>sensori base</b> nello step successivo,
+          puoi lasciare vuoto ciò che segue il pattern automatico.
+        </p>
+        ${portPickersHtml}
 
-        <h4>Entità globali switch</h4>
+        <h4>Traffico globale switch</h4>
+        ${this._picker('I/O switch (MB/s)', 'io_entity', 'sensor')}
+        ${this._picker('Ricevuti totali (MB)', 'rx_entity', 'sensor')}
+        ${this._picker('Inviati totali (MB)', 'tx_entity', 'sensor')}
+
+        <h4>Azioni</h4>
         ${this._picker('Input select selezione porta', 'input_select', 'input_select')}
         ${this._picker('Pulsante reboot', 'reboot_button', 'button')}
 
-        <h4>Override sensori traffico globale</h4>
-        <p style="font-size:11px;color:#888;margin:0 0 10px">Solo se le statistiche vengono da un'entità diversa dal sensor_base.</p>
-        ${this._picker('I/O switch', 'io_entity', 'sensor')}
-        ${this._picker('RX switch', 'rx_entity', 'sensor')}
-        ${this._picker('TX switch', 'tx_entity', 'sensor')}
-
-        <h4>Override per porta (opzionale)</h4>
-        ${portPickersHtml}
-
         <div class="nav">
           <button class="nav-btn prev" onclick="this.getRootNode().host._goStep(1)">← Struttura</button>
-          <button class="nav-btn next" onclick="this.getRootNode().host._goStep(3)">Avanti → Opzioni</button>
+          <button class="nav-btn next" onclick="this.getRootNode().host._goStep(3)">→ Base & Opzioni</button>
         </div>
       </div>`;
   }
 
-  // ── STEP 3: Globali & Opzioni ─────────────────────────────────────────────
+  // ── STEP 3: Sensori base & Opzioni ────────────────────────────────────────
   _renderStep3() {
-    const c = this._config;
     return `
       ${this._css()}
       <div style="padding:16px">
         ${this._stepBar()}
 
-        <h4 class="first">Funzionalità</h4>
-        ${this._sel('Pulsante reboot', 'show_reboot',  [{v:'true',l:'Sì'},{v:'false',l:'No'}])}
-        ${this._sel('Statistiche traffico', 'show_stats',   [{v:'true',l:'Sì'},{v:'false',l:'No'}])}
-        ${this._sel('Tooltip hover porte',  'show_tooltip', [{v:'true',l:'Sì'},{v:'false',l:'No'}])}
+        <h4 class="first">Sensori base (opzionale)</h4>
+        <p style="font-size:11px;color:#888;margin:0 0 10px">
+          Se tutti i tuoi sensori seguono un pattern comune (es. <code>sensor.myswitch_port_1_status</code>),
+          inserisci il prefisso qui e configura i suffissi sotto. Lascia vuoto se hai già configurato
+          ogni porta singolarmente nello step 2.
+        </p>
+        ${this._input('Sensor base', 'sensor_base', 'text', 'es. sensor.gs108ev3_192_168_1_4')}
+        ${this._input('Binary sensor base', 'binary_base', 'text', 'es. binary_sensor.gs108ev3_192_168_1_4')}
+
+        <details open>
+          <summary>⚙ Suffissi entità</summary>
+          ${this._input('Suffisso IP',              'suffix_ip',     'text')}
+          ${this._input('Suffisso SN',              'suffix_sn',     'text')}
+          ${this._input('Suffisso FW',              'suffix_fw',     'text')}
+          ${this._input('Suffisso Bootloader',      'suffix_boot',   'text', 'vuoto = nasconde BL')}
+          ${this._input('Suffisso I/O globale',     'suffix_io',     'text')}
+          ${this._input('Suffisso RX globale',      'suffix_rx',     'text')}
+          ${this._input('Suffisso TX globale',      'suffix_tx',     'text')}
+          ${this._input('Suffisso status porta {N}','suffix_status', 'text')}
+          ${this._input('Suffisso speed porta {N}', 'suffix_speed',  'text')}
+          ${this._input('Suffisso RX porta {N}',    'suffix_port_rx','text')}
+          ${this._input('Suffisso TX porta {N}',    'suffix_port_tx','text')}
+        </details>
+
+        <h4>Funzionalità</h4>
+        ${this._sel('Pulsante reboot',     'show_reboot',  [{v:'true',l:'Sì'},{v:'false',l:'No'}])}
+        ${this._sel('Statistiche traffico','show_stats',   [{v:'true',l:'Sì'},{v:'false',l:'No'}])}
+        ${this._sel('Tooltip hover porte', 'show_tooltip', [{v:'true',l:'Sì'},{v:'false',l:'No'}])}
 
         <h4>Colori</h4>
         <div class="color-grid">
-          ${this._color('Sfondo card',     'color_bg')}
-          ${this._color('Sfondo porta',    'color_port_bg')}
-          ${this._color('Bordo porta',     'color_port_border')}
-          ${this._color('Testo',           'color_text')}
-          ${this._color('Accento',         'color_accent')}
-          ${this._color('Separatore',      'color_sep')}
-          ${this._color('LED spento',      'color_led_off')}
+          ${this._color('Sfondo card',   'color_bg')}
+          ${this._color('Sfondo porta',  'color_port_bg')}
+          ${this._color('Bordo porta',   'color_port_border')}
+          ${this._color('Testo',         'color_text')}
+          ${this._color('Accento',       'color_accent')}
+          ${this._color('Separatore',    'color_sep')}
+          ${this._color('LED spento',    'color_led_off')}
         </div>
-
-        <details>
-          <summary>⚙ Suffissi entità avanzati</summary>
-          ${this._input('Suffisso IP',         'suffix_ip')}
-          ${this._input('Suffisso SN',         'suffix_sn')}
-          ${this._input('Suffisso FW',         'suffix_fw')}
-          ${this._input('Suffisso Bootloader', 'suffix_boot', 'text', 'vuoto = nasconde la riga BL')}
-          ${this._input('Suffisso I/O globale','suffix_io')}
-          ${this._input('Suffisso RX globale', 'suffix_rx')}
-          ${this._input('Suffisso TX globale', 'suffix_tx')}
-          ${this._input('Suffisso status porta ({N})', 'suffix_status')}
-          ${this._input('Suffisso speed porta ({N})',  'suffix_speed')}
-          ${this._input('Suffisso RX porta ({N})',     'suffix_port_rx')}
-          ${this._input('Suffisso TX porta ({N})',     'suffix_port_tx')}
-        </details>
 
         <div class="nav">
           <button class="nav-btn prev" onclick="this.getRootNode().host._goStep(2)">← Sensori porta</button>
