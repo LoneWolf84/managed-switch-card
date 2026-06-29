@@ -19,8 +19,8 @@ const DEFAULTS = {
   ports:  4,            // start small; user sets their actual port count
 
   // Entity bases — always empty; user fills via editor
-  sensor_base: '',      // REQUIRED — set via editor
-  binary_base: '',      // REQUIRED — set via editor
+  sensor_base: '',      // optional — set via editor or per-entity pickers
+  binary_base: '',      // optional — set via editor or per-entity pickers
 
   // Entity suffixes — generic defaults that match common integrations.
   // Override any of these in YAML if your integration uses different names.
@@ -111,8 +111,6 @@ class ManagedSwitchCard extends HTMLElement {
 
   // ── Config ────────────────────────────────────────────────────────────────
   setConfig(config) {
-    if (!config.sensor_base) throw new Error('managed-switch-card: "sensor_base" è obbligatorio.');
-    if (!config.binary_base) throw new Error('managed-switch-card: "binary_base" è obbligatorio.');
     this._config = { ...DEFAULTS, ...config };
     this._config.ports = parseInt(this._config.ports, 10) || 8;
     // Normalise speed_tiers: allow user to extend or replace
@@ -321,13 +319,15 @@ class ManagedSwitchCard extends HTMLElement {
     const rx = (rxEnt ? s[rxEnt]?.state : null) || 'N/A';
     const tx = (txEnt ? s[txEnt]?.state : null) || 'N/A';
 
-    // Header info — needs sensor_base
-    const ip   = cfg.sensor_base ? (s[cfg.sensor_base + cfg.suffix_ip]?.state  || 'N/A') : 'N/A';
-    const sn   = cfg.sensor_base ? (s[cfg.sensor_base + cfg.suffix_sn]?.state  || 'N/A') : 'N/A';
-    const fw   = cfg.sensor_base ? (s[cfg.sensor_base + cfg.suffix_fw]?.state  || 'N/A') : 'N/A';
-    const boot = (cfg.suffix_boot && cfg.sensor_base)
-      ? (s[cfg.sensor_base + cfg.suffix_boot]?.state || 'N/A')
-      : null;
+    // Header info — per-entity picker wins, then sensor_base+suffix, then N/A
+    const ipEnt   = cfg.ip_entity || (cfg.sensor_base ? cfg.sensor_base + cfg.suffix_ip   : null);
+    const snEnt   = cfg.sn_entity || (cfg.sensor_base ? cfg.sensor_base + cfg.suffix_sn   : null);
+    const fwEnt   = cfg.fw_entity || (cfg.sensor_base ? cfg.sensor_base + cfg.suffix_fw   : null);
+    const blEnt   = cfg.bl_entity || (cfg.suffix_boot && cfg.sensor_base ? cfg.sensor_base + cfg.suffix_boot : null);
+    const ip   = (ipEnt ? s[ipEnt]?.state  : null) || 'N/A';
+    const sn   = (snEnt ? s[snEnt]?.state  : null) || 'N/A';
+    const fw   = (fwEnt ? s[fwEnt]?.state  : null) || 'N/A';
+    const boot = blEnt ? (s[blEnt]?.state || 'N/A') : null;
 
     // Count active ports — per-port entity (status_N) or base+suffix
     let activeCount = 0;
@@ -570,7 +570,7 @@ class ManagedSwitchCardEditor extends HTMLElement {
   setConfig(config) {
     this._config = { ...DEFAULTS, ...config };
     // If already configured jump to step 2
-    if (this._config.sensor_base && this._step === 1) this._step = 2;
+    if ((this._config.ports > 1 || Object.keys(config).length > 2) && this._step === 1) this._step = 2;
     this._render();
   }
 
@@ -665,7 +665,7 @@ class ManagedSwitchCardEditor extends HTMLElement {
   // ── Step bar ──────────────────────────────────────────────────────────────
   _stepBar() {
     const c = this._config;
-    const done1 = !!(c.sensor_base && c.binary_base);
+    const done1 = !!(c.ports > 0);
     const done2 = done1;
     const labels = ['1 · Struttura', '2 · Sensori porta', '3 · Globali & Opzioni'];
     return `<div class="steps">` + labels.map((l, i) => {
@@ -810,6 +810,15 @@ class ManagedSwitchCardEditor extends HTMLElement {
         </p>
         ${portPickersHtml}
 
+        <h4>Informazioni switch</h4>
+        <p style="font-size:11px;color:#888;margin:0 0 10px">
+          Dati mostrati nell'header della card (IP, numero seriale, firmware, bootloader).
+        </p>
+        ${this._picker('Indirizzo IP', 'ip_entity', 'sensor')}
+        ${this._picker('Numero seriale', 'sn_entity', 'sensor')}
+        ${this._picker('Firmware', 'fw_entity', 'sensor')}
+        ${this._picker('Bootloader', 'bl_entity', 'sensor', 'opzionale — lascia vuoto per nascondere')}
+
         <h4>Traffico globale switch</h4>
         ${this._picker('I/O switch (MB/s)', 'io_entity', 'sensor')}
         ${this._picker('Ricevuti totali (MB)', 'rx_entity', 'sensor')}
@@ -888,11 +897,26 @@ class ManagedSwitchCardEditor extends HTMLElement {
   // ── Main render ───────────────────────────────────────────────────────────
   _render() {
     if (!this.shadowRoot) return;
+    // Save which <details> are currently open (by their summary text)
+    const openSummaries = new Set();
+    this.shadowRoot.querySelectorAll('details[open] > summary').forEach(s => {
+      openSummaries.add(s.textContent.trim());
+    });
+
     this.shadowRoot.innerHTML =
       this._step === 1 ? this._renderStep1()
     : this._step === 2 ? this._renderStep2()
     : this._renderStep3();
-    // Attach real ha-entity-picker elements after innerHTML is set
+
+    // Restore open state — re-open any <details> whose summary matches
+    if (openSummaries.size > 0) {
+      this.shadowRoot.querySelectorAll('details > summary').forEach(s => {
+        if (openSummaries.has(s.textContent.trim())) {
+          s.parentElement.setAttribute('open', '');
+        }
+      });
+    }
+
     requestAnimationFrame(() => this._attachPickers());
   }
 
