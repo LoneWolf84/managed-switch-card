@@ -14,9 +14,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const DEFAULTS = {
   // Header
-  title:  'SWITCH',
-  model:  '',           // shown as "Modello: X" — leave empty to hide
-  ports:  4,            // start small; user sets their actual port count
+  title:    'SWITCH',
+  logo_url: '',          // optional image URL shown before the title, e.g. /local/logo.png
+  model:    '',          // shown as "Modello: X" — leave empty to hide
+  ports:    4,            // start small; user sets their actual port count
 
   // Entity bases — always empty; user fills via editor
   sensor_base: '',      // optional — set via editor or per-entity pickers
@@ -245,15 +246,17 @@ class ManagedSwitchCard extends HTMLElement {
       }
     }
 
-    // Port RX/TX for tooltip
+    // Port I/O (MB/s), RX, TX for tooltip — per-port picker (io_N) or N/A
+    const portIoEnt = cfg[`io_${i}`] || null;
     const portRxEnt = this._portEntity('suffix_port_rx', i);
     const portTxEnt = this._portEntity('suffix_port_tx', i);
+    const portIo = portIoEnt ? (s[portIoEnt]?.state ?? null) : null;
     const portRx = portRxEnt ? (s[portRxEnt]?.state ?? null) : null;
     const portTx = portTxEnt ? (s[portTxEnt]?.state ?? null) : null;
 
-    // Tooltip data (only built if enabled)
+    // Tooltip data (only built if enabled) — speed text removed (color already shows it)
     const tooltipAttr = cfg.show_tooltip
-      ? `data-tip="${i}|${speed}|${portRx}|${portTx}|${status}|${customLabel}"`
+      ? `data-tip="${i}|${portIo}|${portRx}|${portTx}|${status}|${customLabel}"`
       : '';
 
     // SFP gets a slightly taller/darker bay to differentiate (additive, not replacing)
@@ -380,6 +383,14 @@ class ManagedSwitchCard extends HTMLElement {
       .brand { flex-grow: 1; min-width: 0; }
       .brand-container { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
       .logo { font-weight: 800; font-size: 20px; text-transform: uppercase; letter-spacing: 1px; }
+      .brand-logo {
+        height: 22px;
+        max-width: 90px;
+        width: auto;
+        object-fit: contain;
+        flex-shrink: 0;
+        display: block;
+      }
       .subtitle, .footer-stats {
         color: ${cfg.color_accent};
         font-size: 11px;
@@ -471,6 +482,7 @@ class ManagedSwitchCard extends HTMLElement {
         <div class="header">
           <div class="brand">
             <div class="brand-container">
+              ${cfg.logo_url ? `<img class="brand-logo" src="${cfg.logo_url}" alt="" onerror="this.style.display='none'">` : ''}
               <div class="logo">${cfg.title}</div>
               ${rebootHtml}
             </div>
@@ -513,7 +525,7 @@ class ManagedSwitchCard extends HTMLElement {
     const raw = el.getAttribute('data-tip');
     if (!raw) return;
     const cfg = this._config;
-    const [i, speed, portRx, portTx, status, customLabel] = raw.split('|');
+    const [i, portIo, portRx, portTx, status, customLabel] = raw.split('|');
 
     const existing = this.shadowRoot.querySelector('.sw-tip');
     if (existing) existing.remove();
@@ -526,18 +538,21 @@ class ManagedSwitchCard extends HTMLElement {
       ? `<div class="t-title">${cfg.input_select_option_prefix}${i} — ${customLabel}</div>`
       : `<div class="t-title">${cfg.input_select_option_prefix}${i}</div>`;
 
+    // Speed text removed — the LED color already communicates it.
+    // I/O, RX, TX are all shown in MB/s.
+    const ioRow = portIo && portIo !== 'null' && portIo !== 'N/A'
+      ? `<div class="t-row"><span class="t-lbl">⇅ I/O</span><span class="t-val">${portIo} MB/s</span></div>` : '';
     const rxRow = portRx && portRx !== 'null' && portRx !== 'N/A'
-      ? `<div class="t-row"><span class="t-lbl">↓ RX</span><span class="t-val">${portRx} MB</span></div>` : '';
+      ? `<div class="t-row"><span class="t-lbl">↓ RX</span><span class="t-val">${portRx} MB/s</span></div>` : '';
     const txRow = portTx && portTx !== 'null' && portTx !== 'N/A'
-      ? `<div class="t-row"><span class="t-lbl">↑ TX</span><span class="t-val">${portTx} MB</span></div>` : '';
+      ? `<div class="t-row"><span class="t-lbl">↑ TX</span><span class="t-val">${portTx} MB/s</span></div>` : '';
 
     const tip = document.createElement('div');
     tip.className = 'sw-tip';
     tip.innerHTML = `
       ${nameRow}
       <div class="t-row"><span class="t-lbl">Stato</span><span class="t-val">${statusHtml}</span></div>
-      <div class="t-row"><span class="t-lbl">Velocità</span><span class="t-val">${speed || '—'}</span></div>
-      ${rxRow}${txRow}`;
+      ${ioRow}${rxRow}${txRow}`;
 
     this.shadowRoot.appendChild(tip);
 
@@ -749,7 +764,9 @@ class ManagedSwitchCardEditor extends HTMLElement {
         ${this._stepBar()}
 
         <h4 class="first">Identità</h4>
-        ${this._input('Titolo (logo)', 'title')}
+        ${this._input('Titolo', 'title')}
+        ${this._input('Logo (URL immagine)', 'logo_url', 'text',
+            'es. /local/logo.png — carica l\'immagine in config/www/ e incolla qui il percorso. Altezza fissa ~22px per non sovrapporsi al titolo.')}
         ${this._input('Modello', 'model', 'text', 'es. GS108Ev3 — lascia vuoto per nascondere')}
 
         <h4>Struttura porte</h4>
@@ -791,11 +808,11 @@ class ManagedSwitchCardEditor extends HTMLElement {
         ${this._picker('Stato (link attivo)', `status_${n}`, 'binary_sensor',
             'Binary: on = porta attiva')}
         ${this._picker('Velocità link', `speed_${n}`, 'sensor',
-            'es. 100, 1000, 1G — usato per il colore del LED')}
-        ${this._picker('Traffico ricevuto', `rx_${n}`, 'sensor',
-            'MB ricevuti su questa porta')}
-        ${this._picker('Traffico inviato', `tx_${n}`, 'sensor',
-            'MB inviati su questa porta')}
+            'es. 100, 1000, 1G — usato solo per il colore del LED')}
+        ${this._picker('I/O (MB/s)', `io_${n}`, 'sensor',
+            'Velocità di trasferimento istantanea — mostrata nel tooltip al passaggio del mouse')}
+        ${this._picker('Traffico ricevuto (MB/s)', `rx_${n}`, 'sensor')}
+        ${this._picker('Traffico inviato (MB/s)', `tx_${n}`, 'sensor')}
       </details>`).join('');
 
     return `
