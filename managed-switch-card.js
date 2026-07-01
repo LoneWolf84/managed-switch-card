@@ -756,6 +756,19 @@ class ManagedSwitchCardEditor extends HTMLElement {
     </div>`;
   }
 
+  // Color picker bound to a speed_tiers[] entry, matched by the tier's primary match string.
+  // Updates color and shadow together (shadow = same color, soft glow).
+  _speedColor(label, matchKey) {
+    const tiers = this._config?.speed_tiers || DEFAULTS.speed_tiers;
+    const tier  = tiers.find(t => (Array.isArray(t.match) ? t.match[0] : t.match) === matchKey) || {};
+    const v = tier.color || '#888888';
+    return `<div class="color-row">
+      <label>${label}</label>
+      <input type="color" value="${v}" data-speedkey="${matchKey}"
+             onchange="this.getRootNode().host._speedColorChange(event)"/>
+    </div>`;
+  }
+
   // ── STEP 1: Struttura ─────────────────────────────────────────────────────
   _renderStep1() {
     return `
@@ -905,6 +918,17 @@ class ManagedSwitchCardEditor extends HTMLElement {
           ${this._color('LED spento',    'color_led_off')}
         </div>
 
+        <h4>Colori LED velocità</h4>
+        <p style="font-size:11px;color:#888;margin:0 0 10px">
+          Colore del LED in base alla velocità di link rilevata.
+        </p>
+        <div class="color-grid">
+          ${this._speedColor('10G',  '10000')}
+          ${this._speedColor('1G',   '1000')}
+          ${this._speedColor('100M', '100')}
+          ${this._speedColor('10M',  '10')}
+        </div>
+
         <div class="nav">
           <button class="nav-btn prev" onclick="this.getRootNode().host._goStep(2)">← Sensori porta</button>
         </div>
@@ -951,6 +975,23 @@ class ManagedSwitchCardEditor extends HTMLElement {
     if (key === 'port_labels_raw')  { try{cfg.port_labels=JSON.parse(val);}catch{} this._config=cfg; this._fire(cfg); return; }
     if (['show_reboot','show_stats','show_tooltip'].includes(key)) { cfg[key]=val==='true'; this._config=cfg; this._fire(cfg); return; }
     cfg[key] = val;
+    this._config = cfg;
+    this._fire(cfg);
+  }
+
+  // Updates the color (and matching glow shadow) of a speed_tiers[] entry,
+  // matched by its primary match string (e.g. '1000' for the 1G tier).
+  _speedColorChange(e) {
+    const matchKey = e.target.dataset.speedkey;
+    const newColor = e.target.value;
+    const cfg = { ...this._config };
+    const tiers = (cfg.speed_tiers || DEFAULTS.speed_tiers).map(t => ({ ...t }));
+    const tier = tiers.find(t => (Array.isArray(t.match) ? t.match[0] : t.match) === matchKey);
+    if (tier) {
+      tier.color  = newColor;
+      tier.shadow = `0 0 5px ${newColor}`;
+    }
+    cfg.speed_tiers = tiers;
     this._config = cfg;
     this._fire(cfg);
   }
